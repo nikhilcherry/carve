@@ -42,6 +42,55 @@ class Workspace:
         self.managed = list(managed)
         # What is physically on disk right now, so `apply` only writes deltas.
         self.on_disk: State = dict(seed)
+        # Everything the pristine copy contained.  Anything else appearing
+        # later was made by the command, and must not survive into the next
+        # candidate: a build artefact or a cache left behind by run N can make
+        # run N+1 pass for a reason that has nothing to do with the deletion
+        # being tested.
+        self._managed_set = set(self.managed)
+        self.pristine, self.pristine_dirs = self._scan()
+
+    def _walk(self, topdown: bool = True):
+        """Every (directory, prefix, filenames) pair, never following --link."""
+        for dirpath, dirnames, filenames in os.walk(self.root, topdown=topdown):
+            # Never descend into a --link symlink: that is the user's real
+            # node_modules, not ours to tidy.
+            dirnames[:] = [d for d in dirnames
+                           if not os.path.islink(os.path.join(dirpath, d))]
+            relative = os.path.relpath(dirpath, self.root)
+            prefix = ("" if relative == "."
+                      else relative.replace(os.sep, "/") + "/")
+            yield dirpath, prefix, filenames
+
+    def _scan(self):
+        files, dirs = set(), set()
+        for _, prefix, filenames in self._walk():
+            if prefix:
+                dirs.add(prefix)
+            for name in filenames:
+                files.add(prefix + name)
+        return files, dirs
+
+    def purge_strays(self) -> None:
+        """Delete anything the last run left behind."""
+        for dirpath, prefix, filenames in self._walk(topdown=False):
+            for name in filenames:
+                path = prefix + name
+                stray = path not in self.pristine
+                # A managed file the command recreated after we deleted it is
+                # just as much of a leak as a brand-new artefact.
+                revived = path in self._managed_set and path not in self.on_disk
+                if not (stray or revived):
+                    continue
+                try:
+                    os.remove(os.path.join(dirpath, name))
+                except OSError:
+                    pass
+            if prefix and prefix not in self.pristine_dirs:
+                try:
+                    os.rmdir(dirpath)          # only succeeds when now empty
+                except OSError:
+                    pass
 
     def apply(self, state: State) -> None:
         for path in self.managed:
@@ -210,6 +259,7 @@ class Pool:
         try:
             workspace.apply(state)
             result = run(self.command, workspace.root, self.timeout)
+            workspace.purge_strays()
         finally:
             self._release(workspace)
 
@@ -230,6 +280,7 @@ class Pool:
         try:
             workspace.apply(state)
             result = run(command or self.command, workspace.root, self.timeout)
+            workspace.purge_strays()
         finally:
             self._release(workspace)
         with self._lock:

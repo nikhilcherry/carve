@@ -309,6 +309,39 @@ class WorkspaceTests(TempTree):
         self.assertTrue(os.path.exists(os.path.join(target, "a.txt")))
         self.assertFalse(os.path.exists(os.path.join(target, ".git")))
 
+    def test_purge_removes_what_a_run_left_behind(self):
+        self.write("a.txt", "one\n")
+        self.write("kept/b.txt", "two\n")
+        target = self.scratch("tree")
+        copy_tree(self.root, target)
+        workspace = Workspace(target, ["a.txt", "kept/b.txt"],
+                              {"a.txt": b"one\n", "kept/b.txt": b"two\n"})
+
+        # Pretend the command wrote a cache file and a build directory.
+        with open(os.path.join(target, "cache.bin"), "w") as handle:
+            handle.write("junk")
+        os.makedirs(os.path.join(target, "build", "deep"))
+        with open(os.path.join(target, "build", "deep", "out.o"), "w") as fh:
+            fh.write("junk")
+
+        workspace.purge_strays()
+        self.assertFalse(os.path.exists(os.path.join(target, "cache.bin")))
+        self.assertFalse(os.path.exists(os.path.join(target, "build")))
+        # Everything that was there to begin with survives.
+        self.assertTrue(os.path.exists(os.path.join(target, "a.txt")))
+        self.assertTrue(os.path.exists(os.path.join(target, "kept", "b.txt")))
+
+    def test_purge_removes_a_deleted_file_the_command_recreated(self):
+        self.write("a.txt", "one\n")
+        target = self.scratch("tree")
+        copy_tree(self.root, target)
+        workspace = Workspace(target, ["a.txt"], {"a.txt": b"one\n"})
+        workspace.apply({})                      # carve deletes it
+        with open(os.path.join(target, "a.txt"), "w") as handle:
+            handle.write("the command put it back\n")
+        workspace.purge_strays()
+        self.assertFalse(os.path.exists(os.path.join(target, "a.txt")))
+
     def test_key_is_content_addressed(self):
         self.assertEqual(Pool.key({"a": b"1"}), Pool.key({"a": b"1"}))
         self.assertNotEqual(Pool.key({"a": b"1"}), Pool.key({"a": b"2"}))
@@ -401,6 +434,24 @@ class EndToEndTests(TempTree):
         outcome = carve(self.root, [sys.executable, "-B", "main.py"],
                         jobs=1, verify=1, passes=1)
         self.assertEqual(outcome.command, outcome.original_command)
+
+    def test_a_command_that_poisons_its_own_workspace(self):
+        # Fails once, then passes forever because of the marker it wrote.
+        # Workspaces are reused, so without purging strays the second
+        # candidate tested in a given workspace would silently pass.
+        self.write("main.py", """
+            import os
+
+            if os.path.exists("marker.txt"):
+                raise SystemExit(0)
+            open("marker.txt", "w").write("x")
+            raise ValueError("kaboom")
+        """)
+        self.write("extra.py", "UNUSED = 1\n")
+        outcome = carve(self.root, [sys.executable, "main.py"], jobs=1,
+                        verify=2, passes=2)
+        self.assertTrue(outcome.verified)
+        self.assertEqual(outcome.kept_files, ["main.py"])
 
     def test_refuses_a_command_that_already_passes(self):
         self.write("main.py", "print('fine')\n")

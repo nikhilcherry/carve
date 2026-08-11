@@ -207,6 +207,9 @@ and reports the best one it reached.
 
 - The directory you point carve at is **opened read-only**. Every candidate is
   tested in a scratch copy under your temp directory, removed on exit.
+- Scratch trees are reused for speed but never polluted: anything a run creates
+  — a cache, a build artefact, a marker file — is deleted before the next
+  candidate, so no verdict is ever contaminated by the one before it.
 - carve runs the command you gave it, many times over. That command should be
   one you are happy to run in a loop — a test suite, a build, a script. carve
   is a reducer, not a sandbox.
