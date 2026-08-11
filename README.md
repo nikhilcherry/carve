@@ -131,7 +131,9 @@ carve --expect-exit 139                  -- ./run.sh   # exit status
    round, in parallel.
 5. **Cut lines.** `ddmin` again, down to 1-minimal: removing any single
    remaining line stops the failure.
-6. **Repeat** until a full round changes nothing, then verify the result.
+6. **Cut tokens**, at `--level chars`: the same treatment applied inside each
+   surviving line.
+7. **Repeat** until a full round changes nothing, then verify the result.
 
 Every probe is content-addressed and cached, so no candidate is ever run twice.
 
@@ -141,7 +143,7 @@ Every probe is content-addressed and cached, so no candidate is ever run twice.
 carve [DIR] -- COMMAND...
 carve check [DIR] -- COMMAND...    just show the failure carve would lock onto
 
-  --level files|blocks|lines   how deep to cut (default: lines)
+  --level files|blocks|lines|chars   how deep to cut (default: lines)
   -j, --jobs N                 candidates tested in parallel (default: 4)
   --time-budget 10m            stop after this long, keep the best result
   --max-runs 500               stop after this many probes
@@ -153,6 +155,27 @@ carve check [DIR] -- COMMAND...    just show the failure carve would lock onto
 
 `--level files` is the fast one: it answers "which files matter?" in a fraction
 of the probes, which is often all you needed.
+
+`--level chars` is the thorough one. It keeps cutting *inside* each surviving
+line, which is the difference between a repro you can read and one you can
+publish:
+
+```python
+# --level lines                                    (14 probes)
+def render(name, width, height, timeout=30, retries=5, verbose=False):
+    box = {"name": name, "w": width, "h": height}
+    return box["missing_key"]
+render("panel", 80, 24, timeout=15, retries=2, verbose=True)
+
+# --level chars                                    (652 probes)
+def render(name,height,verbose):
+    box={"":name,"":height}
+    return box["missing_key"]
+render("",2,True)
+```
+
+Every argument that survived is one whose removal stops the bug. Budget it with
+`--time-budget`; carve keeps the best result it reached.
 
 Interrupting with Ctrl-C is safe. carve always holds a state that reproduces,
 and reports the best one it reached.

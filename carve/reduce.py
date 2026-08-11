@@ -22,7 +22,17 @@ from .workspace import BudgetExhausted, Pool, State, copy_tree
 _COMMENT = re.compile(rb"^[ \t]*(#|//|--|;;|/\*|\*/|<!--)")
 _BLANK = re.compile(rb"^[ \t\r\n]*$")
 
-LEVELS = ("files", "blocks", "lines")
+# Identifiers, numbers, runs of whitespace, and every other character alone.
+# Enough structure to delete one argument or one clause at a time, with no
+# idea of any particular grammar.
+_TOKEN = re.compile(rb"[A-Za-z_][A-Za-z0-9_]*|\d+|[ \t]+|.")
+
+# Below this a line has nothing worth taking apart; above the token cap it
+# would cost more probes than the result is worth.
+MIN_TOKEN_LINE = 20
+MAX_LINE_TOKENS = 80
+
+LEVELS = ("files", "blocks", "lines", "chars")
 
 
 @dataclass
@@ -222,11 +232,11 @@ class Reducer:
             if self.pool.test(self._join(path, lines, trial)):
                 alive = trial
 
-        if self.level in ("blocks", "lines"):
+        if self.level in ("blocks", "lines", "chars"):
             groups = [g for g in candidate_blocks(lines) if len(g) > 1]
             alive = self._greedy(path, lines, alive, groups)
 
-        if self.level == "lines":
+        if self.level in ("lines", "chars"):
             def evaluate(candidates: List[List[int]]) -> Optional[int]:
                 return self.pool.first_accepted(
                     [self._join(path, lines, c) for c in candidates])
@@ -238,6 +248,41 @@ class Reducer:
             )
 
         self.current[path] = b"".join(lines[i] for i in alive)
+        if self.level == "chars":
+            self.reduce_chars(path)
+
+    def reduce_chars(self, path: str) -> None:
+        """Take surviving lines apart token by token.
+
+        This is what turns `render(a, b, c, timeout=30, retries=5)` into
+        `render(c)`.  Expensive, so it only runs at `--level chars`.
+        """
+        lines = self.current[path].splitlines(keepends=True)
+        for index, line in enumerate(lines):
+            body = line.rstrip(b"\r\n")
+            tail = line[len(body):]
+            if len(body) < MIN_TOKEN_LINE:
+                continue
+            tokens = _TOKEN.findall(body)
+            if not 4 <= len(tokens) <= MAX_LINE_TOKENS:
+                continue
+
+            def evaluate(candidates: List[List[int]],
+                         at: int = index) -> Optional[int]:
+                states = []
+                for candidate in candidates:
+                    trial = list(lines)
+                    trial[at] = b"".join(tokens[k] for k in candidate) + tail
+                    states.append(
+                        self._with_content(path, b"".join(trial)))
+                return self.pool.first_accepted(states)
+
+            kept = ddmin(list(range(len(tokens))), evaluate, allow_empty=False)
+            if len(kept) < len(tokens):
+                lines[index] = b"".join(tokens[k] for k in kept) + tail
+                self.on_event("shrink", unit="lines", size=len(lines),
+                              path=path)
+        self.current[path] = b"".join(lines)
 
     def _greedy(self, path: str, lines: Sequence[bytes], alive: List[int],
                 groups: List[Set[int]]) -> List[int]:
@@ -289,7 +334,7 @@ class Reducer:
             before = self.pool.key(self.current)
             self.on_event("round", number=round_number + 1, of=self.passes)
             self.reduce_files()
-            if self.level in ("blocks", "lines"):
+            if self.level != "files":
                 self.reduce_contents()
             if self.pool.key(self.current) == before:
                 return

@@ -353,6 +353,25 @@ class EndToEndTests(TempTree):
         # ...and the irrelevant helper must not.
         self.assertNotIn(b"unused", outcome.state["app/core.py"])
 
+    def test_chars_level_cuts_inside_a_line(self):
+        self.write("main.py", """
+            def render(name, width, height, timeout=30, verbose=False):
+                box = {"name": name, "w": width}
+                return box["missing_key"]
+
+
+            render("panel", 80, 24, timeout=15, verbose=True)
+        """)
+        shallow = carve(self.root, [sys.executable, "main.py"], jobs=4,
+                        verify=1, passes=2, level="lines")
+        deep = carve(self.root, [sys.executable, "main.py"], jobs=4,
+                     verify=1, passes=2, level="chars")
+        self.assertTrue(deep.verified)
+        self.assertIn(b"missing_key", deep.state["main.py"])
+        # Same lines, but less of each of them.
+        self.assertLess(deep.after.bytes, shallow.after.bytes)
+        self.assertNotIn(b"timeout=30", deep.state["main.py"])
+
     def test_refuses_a_command_that_already_passes(self):
         self.write("main.py", "print('fine')\n")
         with self.assertRaises(ValueError) as caught:
