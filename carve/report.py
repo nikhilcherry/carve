@@ -88,6 +88,7 @@ def as_dict(outcome: Outcome) -> dict:
         "root": outcome.root,
         "command": outcome.command,
         "command_line": describe(outcome.command),
+        "original_command": outcome.original_command,
         "oracle": outcome.oracle.to_dict(),
         "before": outcome.before.to_dict(),
         "after": outcome.after.to_dict(),
@@ -136,6 +137,11 @@ def render_markdown(outcome: Outcome, inline: bool = True) -> str:
     add("$ " + describe(outcome.command))
     add("```")
     add("")
+    if outcome.command != outcome.original_command:
+        add("Shortened from `{0}` — the arguments carve dropped made no "
+            "difference to the failure.".format(describe(
+                outcome.original_command)))
+        add("")
     add("## Still fails the same way")
     add("")
     for clause in outcome.oracle.explain():
@@ -242,7 +248,9 @@ def print_summary(outcome: Outcome, style: Style, out_dir: Optional[str] = None,
         detail = "empty" if not blob.strip() else "{0:,} lines".format(count)
         line("    {0} {1} {2}".format(marker, path.ljust(48)[:48],
                                       style.grey(detail)))
-    line()
+    if outcome.command != outcome.original_command:
+        line("    " + style.grey("command  ") + "$ " + describe(outcome.command))
+        line()
     line(style.grey("    {0} runs · {1} cached · {2}".format(
         outcome.runs, outcome.cache_hits, human_time(outcome.seconds))))
     if outcome.truncated:

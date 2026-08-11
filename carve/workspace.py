@@ -223,12 +223,13 @@ class Pool:
             self.on_run(runs, verdict)
         return verdict
 
-    def run_raw(self, state: State) -> RunResult:
+    def run_raw(self, state: State,
+                command: Optional[Sequence[str]] = None) -> RunResult:
         """Execute a candidate and hand back the whole result, uncached."""
         workspace = self._acquire()
         try:
             workspace.apply(state)
-            result = run(self.command, workspace.root, self.timeout)
+            result = run(command or self.command, workspace.root, self.timeout)
         finally:
             self._release(workspace)
         with self._lock:

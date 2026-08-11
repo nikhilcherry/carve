@@ -383,6 +383,25 @@ class EndToEndTests(TempTree):
         self.assertLess(deep.after.bytes, shallow.after.bytes)
         self.assertNotIn(b"timeout=30", deep.state["main.py"])
 
+    def test_shrink_command_drops_pointless_arguments(self):
+        self.write("main.py", "raise ValueError('kaboom')\n")
+        outcome = carve(self.root,
+                        [sys.executable, "-B", "-u", "main.py"],
+                        jobs=1, verify=1, passes=1, shrink_command=True)
+        self.assertEqual(outcome.original_command[-1], "main.py")
+        # -B and -u change nothing about the traceback, so they go.
+        self.assertNotIn("-B", outcome.command)
+        self.assertNotIn("-u", outcome.command)
+        # The script itself is what produces the failure, so it stays.
+        self.assertIn("main.py", outcome.command)
+        self.assertTrue(outcome.verified)
+
+    def test_command_is_untouched_by_default(self):
+        self.write("main.py", "raise ValueError('kaboom')\n")
+        outcome = carve(self.root, [sys.executable, "-B", "main.py"],
+                        jobs=1, verify=1, passes=1)
+        self.assertEqual(outcome.command, outcome.original_command)
+
     def test_refuses_a_command_that_already_passes(self):
         self.write("main.py", "print('fine')\n")
         with self.assertRaises(ValueError) as caught:

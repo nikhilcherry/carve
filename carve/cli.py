@@ -105,6 +105,9 @@ def build_parser() -> argparse.ArgumentParser:
                      help="stop after this many test runs")
     how.add_argument("--time-budget", type=parse_duration, metavar="DURATION",
                      help="stop after this long, e.g. 10m")
+    how.add_argument("--shrink-command", action="store_true",
+                     help="also drop command arguments that make no "
+                          "difference to the failure")
     how.add_argument("--work-dir", metavar="DIR",
                      help="where to put scratch trees (default: system temp)")
 
@@ -263,7 +266,8 @@ def entrypoint(argv: Optional[Sequence[str]] = None) -> int:
             time_budget=args.time_budget, expect_exit=args.expect_exit,
             ignore_exit=args.ignore_exit, patterns=args.expect,
             signatures=args.signature, verify=args.verify,
-            allow_flaky=args.allow_flaky, on_event=progress.event,
+            allow_flaky=args.allow_flaky, shrink_command=args.shrink_command,
+            on_event=progress.event,
         )
     except ValueError as exc:
         progress.done()

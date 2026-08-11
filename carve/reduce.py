@@ -49,6 +49,7 @@ class Stats:
 class Outcome:
     root: str
     command: List[str]
+    original_command: List[str]
     oracle: oracle_mod.Oracle
     baseline: RunResult
     before: Stats
@@ -366,6 +367,29 @@ def characterise(
         shutil.rmtree(scratch, ignore_errors=True)
 
 
+def reduce_command(pool: Pool, state: State,
+                   command: Sequence[str]) -> List[str]:
+    """Drop the arguments the failure does not need.
+
+    `pytest -vv --tb=long -p no:cacheprovider tests/` is not a command anyone
+    wants in a bug report.  Anything that changes the output — a verbosity
+    flag that reshapes a traceback, the path that selects the failing test —
+    fails the oracle and stays.
+    """
+    if len(command) < 2:
+        return list(command)
+    program, arguments = command[0], list(command[1:])
+
+    def evaluate(candidates: List[List[str]]) -> Optional[int]:
+        for index, candidate in enumerate(candidates):
+            trial = [program] + candidate
+            if pool.oracle.holds(pool.run_raw(state, trial)):
+                return index
+        return None
+
+    return [program] + ddmin(arguments, evaluate, allow_empty=True)
+
+
 def named_in(output: str, paths: Sequence[str]) -> List[str]:
     """The files the failure output mentions, by path or by basename.
 
@@ -401,6 +425,7 @@ def carve(
     signatures: Sequence[str] = (),
     verify: int = 1,
     allow_flaky: bool = False,
+    shrink_command: bool = False,
     on_event: Optional[Callable[..., None]] = None,
 ) -> Outcome:
     """Shrink `root` to the least that still fails `command` the same way."""
@@ -463,6 +488,10 @@ def carve(
                 notes.append(message)
                 break
 
+        if shrink_command:
+            emit("phase", name="command", total=len(command))
+            pool.command = reduce_command(pool, dict(originals), command)
+
         reducer = Reducer(pool, originals, pinned, reducible, level, passes,
                           emit, hot=named_in(baseline.output, reducible))
         truncated = False
@@ -484,7 +513,8 @@ def carve(
 
         return Outcome(
             root=root,
-            command=list(command),
+            command=list(pool.command),
+            original_command=list(command),
             oracle=pool.oracle,
             baseline=baseline,
             before=measure(originals),

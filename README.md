@@ -147,6 +147,7 @@ carve check [DIR] -- COMMAND...    just show the failure carve would lock onto
   -j, --jobs N                 candidates tested in parallel (default: 4)
   --time-budget 10m            stop after this long, keep the best result
   --max-runs 500               stop after this many probes
+  --shrink-command             drop command arguments that change nothing
   --keep 'conftest.py'         never delete or edit these
   --only 'src/**'              only reduce these
   --link node_modules          symlink instead of copying heavy directories
@@ -176,6 +177,14 @@ render("",2,True)
 
 Every argument that survived is one whose removal stops the bug. Budget it with
 `--time-budget`; carve keeps the best result it reached.
+
+`--shrink-command` turns the reducer on your own invocation. The same oracle
+applies, so an argument only goes if the failure is bit-for-bit unmoved:
+
+```console
+$ carve --shrink-command -- pytest -vv --tb=long -p no:cacheprovider tests -q
+    command  $ pytest -vv -q
+```
 
 Interrupting with Ctrl-C is safe. carve always holds a state that reproduces,
 and reports the best one it reached.
