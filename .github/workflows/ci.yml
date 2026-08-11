@@ -65,6 +65,69 @@ jobs:
           print('reduced', data['before'], '->', data['after'])
           PY
 
+      # The whole claim is that carve never parses your code, so one end-to-end
+      # case in a language it knows nothing about is worth more than another
+      # Python one. A segfault behind a Makefile is the hardest version: the
+      # failure prints no message beyond the shell's own.
+      - name: Carve a C segfault behind a Makefile
+        if: matrix.python-version == '3.12'
+        run: |
+          mkdir -p /tmp/cdemo/src /tmp/cdemo/include
+          for i in 1 2 3 4 5 6; do
+            printf 'int scale_%s(int v) { return v * %s; }\n' "$i" "$i" \
+              > /tmp/cdemo/src/util_$i.c
+            printf 'int scale_%s(int v);\n' "$i" > /tmp/cdemo/include/util_$i.h
+          done
+          cat > /tmp/cdemo/include/widget.h <<'H'
+          #ifndef WIDGET_H
+          #define WIDGET_H
+          struct widget {
+              int width;
+              int height;
+              const char *label;
+          };
+          int widget_width(struct widget *w);
+          #endif
+          H
+          cat > /tmp/cdemo/src/widget.c <<'C'
+          #include "widget.h"
+
+          int widget_area(struct widget *w) {
+              return w->width * w->height;
+          }
+
+          int widget_width(struct widget *w) {
+              return w->width;
+          }
+          C
+          cat > /tmp/cdemo/src/main.c <<'C'
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include "widget.h"
+
+          int main(void) {
+              printf("starting up\n");
+              struct widget *w = NULL;
+              int n = widget_width(w);
+              printf("width %d\n", n);
+              return 0;
+          }
+          C
+          printf 'run: build\n\t./app\nbuild:\n\tgcc -g -Iinclude src/*.c -o app\n' \
+            > /tmp/cdemo/Makefile
+
+          python -m carve /tmp/cdemo -o /tmp/creduced --no-color -j 2 -q \
+            -- make run
+          # Every unrelated module goes; the null dereference stays.
+          test ! -e /tmp/creduced/src/util_1.c
+          test ! -e /tmp/creduced/include/util_1.h
+          grep -q 'NULL' /tmp/creduced/src/main.c
+          grep -q 'w->width' /tmp/creduced/src/widget.c
+          # The struct field nothing reads should not have survived.
+          ! grep -q 'label' /tmp/creduced/include/widget.h
+          # And the reduction still segfaults, on its own, from a clean shell.
+          ( cd /tmp/creduced && make run; test $? -ne 0 )
+
       - name: The source tree is never touched
         run: |
           find /tmp/demo -type f | sort > /tmp/after.txt
