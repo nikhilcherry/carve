@@ -113,6 +113,80 @@ class SignatureTests(unittest.TestCase):
         self.assertEqual(oracle.extract_signatures(result()), [])
 
 
+class RealWorldSignatureTests(unittest.TestCase):
+    """Signature choice is the most fragile heuristic in carve.
+
+    Each of these is output from a real toolchain.  The requirement is always
+    the same: pick the line that names *this* failure, never the line that
+    counts how many failures there were.
+    """
+
+    def check(self, output, must_contain, must_avoid=()):
+        picked = oracle.extract_signatures(result(stdout=output))
+        self.assertTrue(picked, "no signature chosen from:\n" + output)
+        joined = " || ".join(picked)
+        self.assertIn(must_contain, joined)
+        for banned in must_avoid:
+            self.assertNotIn(banned, joined)
+
+    def test_go_test(self):
+        self.check(
+            "=== RUN   TestSummarise\n"
+            "--- FAIL: TestSummarise (0.00s)\n"
+            "panic: runtime error: index out of range [0] with length 0\n"
+            "FAIL\texample.com/pkg\t0.012s\n",
+            "index out of range",
+        )
+
+    def test_cargo_test(self):
+        self.check(
+            "running 2 tests\n"
+            "test tests::ok ... ok\n"
+            "test tests::boom ... FAILED\n"
+            "thread 'tests::boom' panicked at src/lib.rs:12:5:\n"
+            "assertion `left == right` failed\n"
+            "test result: FAILED. 1 passed; 1 failed; 0 ignored\n",
+            "panicked at",
+            must_avoid=["N passed"],
+        )
+
+    def test_jest(self):
+        self.check(
+            "FAIL  src/parse.test.js\n"
+            "  ● parse › handles empty input\n"
+            "    TypeError: Cannot read properties of undefined "
+            "(reading 'length')\n"
+            "Tests:       1 failed, 2 passed, 3 total\n",
+            "Cannot read properties of undefined",
+            must_avoid=["total"],
+        )
+
+    def test_c_compiler(self):
+        self.check(
+            "gcc -c main.c\n"
+            "main.c:5:12: error: 'widget' undeclared "
+            "(first use in this function)\n"
+            "make: *** [Makefile:4: main.o] Error 1\n",
+            "undeclared",
+        )
+
+    def test_java_stack_trace(self):
+        self.check(
+            "Tests run: 3, Failures: 1, Errors: 0, Skipped: 0\n"
+            "java.lang.NullPointerException: Cannot invoke "
+            '"String.length()" because "s" is null\n'
+            "\tat com.example.Widget.render(Widget.java:41)\n",
+            "NullPointerException",
+            must_avoid=["Failures"],
+        )
+
+    def test_segfault_with_no_message(self):
+        self.check(
+            "running suite\nSegmentation fault (core dumped)\n",
+            "Segmentation fault",
+        )
+
+
 class OracleTests(unittest.TestCase):
     def test_requires_the_same_exit_code(self):
         subject = oracle.build(result(exit_code=3, stderr="ValueError: nope"))
