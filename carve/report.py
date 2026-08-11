@@ -82,6 +82,23 @@ def write_tree(outcome: Outcome, out_dir: str, force: bool = False) -> str:
     return out_dir
 
 
+def free_name(outcome: Outcome, out_dir: str, name: str) -> str:
+    """A path for carve's own output that does not clobber a reduced file.
+
+    A repository containing its own `REPRO.md` is not far-fetched, and quietly
+    overwriting it would corrupt the one thing carve promises still runs.
+    """
+    kept = set(outcome.state)
+    stem, ext = os.path.splitext(name)
+    candidate = name
+    suffix = 0
+    while candidate in kept:
+        suffix += 1
+        candidate = "{0}.carve{1}{2}".format(
+            stem, "" if suffix == 1 else "-{0}".format(suffix), ext)
+    return os.path.join(out_dir, candidate)
+
+
 def as_dict(outcome: Outcome) -> dict:
     return {
         "carve_version": __version__,

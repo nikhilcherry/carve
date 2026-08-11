@@ -481,6 +481,23 @@ class ReportTests(TempTree):
         with self.assertRaises(ValueError):
             report.write_tree(outcome, self.root)
 
+    def test_report_never_overwrites_a_reduced_file(self):
+        outcome = self.make_outcome()
+        outcome.state["REPRO.md"] = b"# the project's own readme\n"
+        out_dir = self.scratch("r")
+        report.write_tree(outcome, out_dir)
+        target = report.free_name(outcome, out_dir, "REPRO.md")
+        self.assertEqual(os.path.basename(target), "REPRO.carve.md")
+        report.write_markdown(outcome, target)
+        with open(os.path.join(out_dir, "REPRO.md"), "rb") as handle:
+            self.assertEqual(handle.read(), b"# the project's own readme\n")
+
+    def test_free_name_passes_through_when_clear(self):
+        outcome = self.make_outcome()
+        self.assertEqual(
+            os.path.basename(report.free_name(outcome, "/o", "carve.json")),
+            "carve.json")
+
     def test_fence_language(self):
         self.assertEqual(report.fence_for("a/b.py"), "python")
         self.assertEqual(report.fence_for("Dockerfile"), "dockerfile")

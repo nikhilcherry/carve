@@ -15,7 +15,7 @@ from typing import List, Optional, Sequence, Tuple
 
 from . import __version__
 from .reduce import LEVELS, carve, characterise
-from .report import (print_summary, render_markdown, write_json,
+from .report import (free_name, print_summary, render_markdown, write_json,
                      write_markdown, write_tree)
 from .runner import describe
 from .term import Style, colour_enabled, human_time
@@ -294,8 +294,8 @@ def entrypoint(argv: Optional[Sequence[str]] = None) -> int:
     except ValueError as exc:
         sys.stderr.write("carve: {0}\n".format(exc))
         return 1
-    write_markdown(outcome, os.path.join(out_dir, "REPRO.md"))
-    write_json(outcome, args.json or os.path.join(out_dir, "carve.json"))
+    write_markdown(outcome, free_name(outcome, out_dir, "REPRO.md"))
+    write_json(outcome, args.json or free_name(outcome, out_dir, "carve.json"))
     print_summary(outcome, style, out_dir)
     return 0 if outcome.verified else 1
 
