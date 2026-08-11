@@ -17,20 +17,7 @@ fails *the exact same way*.
 carve -- pytest tests/test_upload.py
 ```
 
-```
-  carved down to
-
-    files            412  →  2      99% gone
-    lines         68,110  →  14     99% gone
-    bytes        2.1 MiB  →  409 B  99% gone
-
-    · src/parser.py                     9 lines
-    · tests/test_parser.py              5 lines
-
-    129 runs · 92 cached · 17.0 s
-
-    ./carve-out
-```
+![A dark terminal window titled "carve -- pytest tests -q". It reads "carved down to", then three rows: files 25 to 2, 92% gone; lines 314 to 14, 96% gone; bytes 5.1 KiB to 409 B, 92% gone. Below, the two surviving files are listed — src/parser.py at 9 lines and tests/test_parser.py at 5 lines — then "129 runs · 92 cached · 17.2 s" and the output path](docs/images/carved.svg)
 
 Everything in `./carve-out` still fails. Everything deleted is now *proven* not
 to matter. Your own directory is never written to.
@@ -88,15 +75,7 @@ that fails because the reducer broke the syntax.
 carve runs your command once, fingerprints the failure, and rejects any
 candidate that does not match it:
 
-```console
-$ carve check -- pytest tests -q
-
-  exit status 1   in 304 ms
-
-  carve would keep cutting while
-    - exit status is 1
-    - output contains "FAILED tests/test_parser.py::test_empty - IndexError: list index ou..."
-```
+![A dark terminal window titled "carve check -- pytest tests -q", showing "exit status 1 in 307 ms" and then, under the heading "carve would keep cutting while", two conditions: exit status is 1, and output contains "FAILED tests/test_parser.py::test_summarise_empty - IndexError: list index ou..."](docs/images/check.svg)
 
 Signatures are normalised before matching, so shifting line numbers, temporary
 paths, memory addresses and durations never count as a different bug. carve
