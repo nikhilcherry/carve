@@ -126,7 +126,9 @@ jobs:
           # The struct field nothing reads should not have survived.
           ! grep -q 'label' /tmp/creduced/include/widget.h
           # And the reduction still segfaults, on its own, from a clean shell.
-          ( cd /tmp/creduced && make run; test $? -ne 0 )
+          # `! cmd` rather than `cmd; test $? -ne 0`: under set -e the failure
+          # would kill the subshell before the check ever ran.
+          ( cd /tmp/creduced && ! make run )
 
       - name: The source tree is never touched
         run: |
