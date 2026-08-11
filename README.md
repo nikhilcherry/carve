@@ -57,6 +57,33 @@ Fourteen seconds, and the docstring, the imports, the package `__init__`, the
 other thirteen modules and the other thirty-nine tests are all gone — each one
 individually proven irrelevant by deleting it and watching the bug survive.
 
+### And on a language carve knows nothing about
+
+Same tool, a C project built through a Makefile, failing with a segfault that
+prints no message at all:
+
+```console
+$ carve ~/code/cdemo -- make run
+
+    files      17  →  4     76% gone
+    lines     122  →  16    87% gone
+```
+
+```c
+/* src/main.c */              /* src/widget.c */
+#include <stdlib.h>           #include "widget.h"
+int main(void) {              int widget_width(struct widget *w) {
+    struct widget *w = NULL;      return w->width;
+    int n = widget_width(w);  }
+}
+                              /* include/widget.h */
+                              struct widget { int width; };
+```
+
+Six unrelated modules, both unused struct fields, `widget_area`, the `printf`s
+and the `return 0` are gone. carve has no idea what C is — it deleted text and
+ran `make`.
+
 ## Install
 
 ```bash
