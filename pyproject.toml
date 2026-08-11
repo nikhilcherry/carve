@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carve-cli"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shrink a failing repository to the least that still fails the same way."
 readme = "README.md"
 requires-python = ">=3.9"
