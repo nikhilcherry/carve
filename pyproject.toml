@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "carve-cli"
+version = "0.1.0"
+description = "Shrink a failing repository to the least that still fails the same way."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Nikhil Ammisetty" }]
+keywords = ["debugging", "delta-debugging", "minimal-reproduction", "bisect",
+            "test-case-reduction", "bug-report", "developer-tools"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Software Development :: Debuggers",
+  "Topic :: Software Development :: Testing",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/nikhilcherry/carve"
+Issues = "https://github.com/nikhilcherry/carve/issues"
+
+[project.scripts]
+carve = "carve.cli:main"
+
+[tool.setuptools]
+packages = ["carve"]

@@ -1,0 +1,78 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Carve a real failure end to end
+        run: |
+          mkdir -p /tmp/demo/src /tmp/demo/noise
+          for i in 1 2 3 4 5 6; do
+            printf 'VALUE = %s\n\n\ndef helper(x):\n    return x * VALUE\n' "$i" \
+              > /tmp/demo/noise/mod_$i.py
+          done
+          cat > /tmp/demo/src/thing.py <<'PY'
+          PREFIX = "id-"
+
+
+          def label(items):
+              return PREFIX + items[0]
+
+
+          def unused(items):
+              return len(items)
+          PY
+          cat > /tmp/demo/main.py <<'PY'
+          import os
+          import sys
+
+          sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+          import thing
+
+          print("starting")
+          thing.label([])
+          PY
+          python -m carve /tmp/demo -o /tmp/reduced --no-color -j 2 \
+            -- python main.py
+          test -f /tmp/reduced/main.py
+          test -f /tmp/reduced/src/thing.py
+          test ! -e /tmp/reduced/noise
+          grep -q 'items\[0\]' /tmp/reduced/src/thing.py
+          ! grep -q 'unused' /tmp/reduced/src/thing.py
+          python - <<'PY'
+          import json
+          data = json.load(open('/tmp/reduced/carve.json'))
+          assert data['verified'], data
+          assert data['after']['files'] == 2, data['after']
+          assert data['after']['lines'] < data['before']['lines']
+          print('reduced', data['before'], '->', data['after'])
+          PY
+
+      - name: The source tree is never touched
+        run: |
+          find /tmp/demo -type f | sort > /tmp/after.txt
+          test "$(wc -l < /tmp/after.txt)" -ge 8
+
+      - name: Package builds and installs
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+          python -m pip install dist/*.whl
+          carve --version
