@@ -150,6 +150,8 @@ carve --expect-exit 139                  -- ./run.sh   # exit status
 7. **Repeat** until a full round changes nothing, then verify the result.
 
 Every probe is content-addressed and cached, so no candidate is ever run twice.
+[docs/DESIGN.md](docs/DESIGN.md) goes through the whole thing, including why
+the oracle is the part that decides whether any of it can be trusted.
 
 ## Options worth knowing
 

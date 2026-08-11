@@ -267,7 +267,7 @@ def print_summary(outcome: Outcome, style: Style, out_dir: Optional[str] = None,
                                       style.grey(detail)))
     if outcome.command != outcome.original_command:
         line("    " + style.grey("command  ") + "$ " + describe(outcome.command))
-        line()
+    line()
     line(style.grey("    {0} runs · {1} cached · {2}".format(
         outcome.runs, outcome.cache_hits, human_time(outcome.seconds))))
     if outcome.truncated:
