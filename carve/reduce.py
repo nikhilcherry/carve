@@ -152,11 +152,13 @@ class Reducer:
         level: str = "lines",
         passes: int = 3,
         on_event: Optional[Callable[..., None]] = None,
+        hot: Sequence[str] = (),
     ) -> None:
         self.pool = pool
         self.originals = originals
         self.pinned = set(pinned)
         self.reducible = set(reducible)
+        self.hot = set(hot)
         self.level = level
         self.passes = max(1, passes)
         self.on_event = on_event or (lambda *a, **k: None)
@@ -204,7 +206,10 @@ class Reducer:
     def reduce_contents(self) -> None:
         targets = [p for p in self.current
                    if p in self.reducible and self.current[p]]
-        targets.sort(key=lambda p: (-len(self.current[p]), p))
+        # Files the failure actually named go first.  On a big tree the budget
+        # often runs out mid-pass, and the file in the stack trace is the one
+        # the user came here to read.
+        targets.sort(key=lambda p: (p not in self.hot, -len(self.current[p]), p))
         for path in targets:
             self.reduce_file(path)
 
@@ -361,6 +366,19 @@ def characterise(
         shutil.rmtree(scratch, ignore_errors=True)
 
 
+def named_in(output: str, paths: Sequence[str]) -> List[str]:
+    """The files the failure output mentions, by path or by basename.
+
+    A stack trace is the cheapest relevance signal there is, and it costs no
+    extra probes to read.
+    """
+    hot: List[str] = []
+    for path in paths:
+        if path in output or os.path.basename(path) in output:
+            hot.append(path)
+    return hot
+
+
 def carve(
     root: str,
     command: Sequence[str],
@@ -446,7 +464,7 @@ def carve(
                 break
 
         reducer = Reducer(pool, originals, pinned, reducible, level, passes,
-                          emit)
+                          emit, hot=named_in(baseline.output, reducible))
         truncated = False
         try:
             reducer.run()

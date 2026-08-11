@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from carve import cli, oracle, report, tree                        # noqa: E402
 from carve.ddmin import ddmin, split                               # noqa: E402
 from carve.reduce import (brace_blocks, candidate_blocks, carve,    # noqa: E402
-                          indent_blocks, measure)
+                          indent_blocks, measure, named_in)
 from carve.runner import RunResult, describe, run, wants_shell     # noqa: E402
 from carve.workspace import Pool, Workspace, copy_tree             # noqa: E402
 
@@ -189,6 +189,17 @@ class BlockTests(unittest.TestCase):
 
     def test_no_blocks_in_flat_text(self):
         self.assertEqual(indent_blocks(self.lines("a\nb\nc\n")), [])
+
+
+class NamedInTests(unittest.TestCase):
+    def test_matches_full_path_and_basename(self):
+        output = ('  File "/tmp/x/app/core.py", line 5\n'
+                  "    at handler.js:12\n")
+        hot = named_in(output, ["app/core.py", "web/handler.js", "other.py"])
+        self.assertEqual(sorted(hot), ["app/core.py", "web/handler.js"])
+
+    def test_nothing_named_is_nothing_hot(self):
+        self.assertEqual(named_in("boom", ["a.py"]), [])
 
 
 # -- discovery -------------------------------------------------------------
