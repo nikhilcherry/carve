@@ -22,6 +22,41 @@ carve -- pytest tests/test_upload.py
 Everything in `./carve-out` still fails. Everything deleted is now *proven* not
 to matter. Your own directory is never written to.
 
+## On a real codebase
+
+A 28-file, 7,929-line Python project with one bad helper buried in it, and a
+test suite that catches it:
+
+```console
+$ carve ~/code/strata -- python -m unittest discover -s tests
+
+    files             28  →  2     93% gone
+    lines          7,929  →  8     99% gone
+    bytes      950.6 KiB  →  287 B  99% gone
+
+    382 runs · 262 cached · 13.6 s
+```
+
+What survived, in full:
+
+```python
+# strata/complexity.py
+def _worst_line(scores):
+    ordered = sorted(scores)
+    return ordered[len(ordered) - 1]
+
+# tests/test_strata.py
+import unittest
+class BuggyHelperTests(unittest.TestCase):
+    def test_worst_line_of_nothing(self):
+        from strata.complexity import _worst_line
+        self.assertEqual(_worst_line([]), 0)
+```
+
+Fourteen seconds, and the docstring, the imports, the package `__init__`, the
+other thirteen modules and the other thirty-nine tests are all gone — each one
+individually proven irrelevant by deleting it and watching the bug survive.
+
 ## Install
 
 ```bash

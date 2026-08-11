@@ -8,7 +8,7 @@
 <text x="18.0" y="56.0" fill="#e6ebf2" xml:space="preserve">  running once in a scratch copy of ~/demo</text>
 <text x="34.8" y="94.0" fill="#e6ebf2" font-weight="600" xml:space="preserve">exit status </text>
 <text x="135.6" y="94.0" fill="#e6ebf2" xml:space="preserve">1</text>
-<text x="144.0" y="94.0" fill="#e6ebf2" xml:space="preserve">   in 307 ms</text>
+<text x="144.0" y="94.0" fill="#e6ebf2" xml:space="preserve">   in 290 ms</text>
 <text x="34.8" y="132.0" fill="#e6ebf2" font-weight="600" xml:space="preserve">carve would keep cutting while</text>
 <text x="18.0" y="151.0" fill="#e6ebf2" xml:space="preserve">    - exit status is 1</text>
 <text x="18.0" y="170.0" fill="#e6ebf2" xml:space="preserve">    - output contains “FAILED tests/test_parser.py::test_summarise_empty - IndexError: list index ou...”</text>

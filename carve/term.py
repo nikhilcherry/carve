@@ -90,7 +90,11 @@ def human_time(seconds: float) -> str:
 def percent_drop(before: int, after: int) -> str:
     if before <= 0:
         return "0%"
-    return "{0:.0f}%".format(100.0 * (before - after) / before)
+    share = 100.0 * (before - after) / before
+    # 7,929 lines down to 8 is not "100% gone" while 8 of them are right there.
+    if after > 0 and share > 99:
+        return "99%"
+    return "{0:.0f}%".format(share)
 
 
 def truncate(text: str, width: int) -> str:

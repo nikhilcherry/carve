@@ -486,6 +486,13 @@ class ReportTests(TempTree):
         self.assertEqual(report.fence_for("Dockerfile"), "dockerfile")
         self.assertEqual(report.fence_for("weird.zzz"), "")
 
+    def test_percent_drop_never_claims_a_total_wipe(self):
+        from carve.term import percent_drop
+        self.assertEqual(percent_drop(7929, 8), "99%")
+        self.assertEqual(percent_drop(100, 0), "100%")
+        self.assertEqual(percent_drop(4, 2), "50%")
+        self.assertEqual(percent_drop(0, 0), "0%")
+
     def test_measure(self):
         stats = measure({"a": b"one\ntwo\n", "b": b""})
         self.assertEqual(stats.files, 2)
