@@ -126,6 +126,42 @@ def brace_blocks(lines: Sequence[bytes]) -> List[Tuple[int, int]]:
     return blocks
 
 
+def unwrap_candidates(lines: Sequence[bytes]) -> List[bytes]:
+    """Bodies lifted out of their wrapper, biggest wrapper first.
+
+    Deletion alone cannot get past `if debug:` when the statement underneath it
+    is the one that matters — the header is load-bearing only because its body
+    is. Removing the header and dedenting the body is the smallest transform
+    that breaks that deadlock, and it needs no grammar: it is true of every
+    language that indents.
+    """
+    spans: List[Tuple[int, int, int]] = []
+    for start, end in indent_blocks(lines):
+        header = lines[start]
+        if b"\t" in header:
+            continue                       # mixing tabs and spaces: not worth it
+        body = [lines[i] for i in range(start + 1, end) if lines[i].strip()]
+        if not body or any(b"\t" in line for line in body):
+            continue
+        head_indent = len(header) - len(header.lstrip())
+        body_indent = min(len(line) - len(line.lstrip()) for line in body)
+        if body_indent <= head_indent:
+            continue
+        spans.append((start, end, body_indent - head_indent))
+
+    spans.sort(key=lambda span: (span[0] - span[1], span[0]))
+    results: List[bytes] = []
+    for start, end, shift in spans:
+        lifted: List[bytes] = []
+        for index in range(start + 1, end):
+            line = lines[index]
+            strip = min(shift, len(line) - len(line.lstrip()))
+            lifted.append(line[strip:])
+        results.append(b"".join(
+            list(lines[:start]) + lifted + list(lines[end:])))
+    return results
+
+
 def candidate_blocks(lines: Sequence[bytes]) -> List[Set[int]]:
     """Every block worth trying to delete, biggest first."""
     seen: Set[Tuple[int, int]] = set()
@@ -254,8 +290,25 @@ class Reducer:
             )
 
         self.current[path] = b"".join(lines[i] for i in alive)
+        if self.level in ("lines", "chars"):
+            self.unwrap(path)
         if self.level == "chars":
             self.reduce_chars(path)
+
+    def unwrap(self, path: str) -> None:
+        """Lift bodies out of wrappers that only exist to hold them."""
+        for _ in range(64):                # a wrapper cannot nest forever
+            lines = self.current[path].splitlines(keepends=True)
+            candidates = unwrap_candidates(lines)
+            if not candidates:
+                return
+            hit = self.pool.first_accepted(
+                [self._with_content(path, text) for text in candidates])
+            if hit is None:
+                return
+            self.current[path] = candidates[hit]
+            self.on_event("shrink", unit="lines", path=path,
+                          size=len(candidates[hit].splitlines()))
 
     def reduce_chars(self, path: str) -> None:
         """Take surviving lines apart token by token.

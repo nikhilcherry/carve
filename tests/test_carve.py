@@ -14,7 +14,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from carve import cli, oracle, report, tree                        # noqa: E402
 from carve.ddmin import ddmin, split                               # noqa: E402
 from carve.reduce import (brace_blocks, candidate_blocks, carve,    # noqa: E402
-                          indent_blocks, measure, named_in)
+                          indent_blocks, measure, named_in,
+                          unwrap_candidates)
 from carve.runner import RunResult, describe, run, wants_shell     # noqa: E402
 from carve.workspace import Pool, Workspace, copy_tree             # noqa: E402
 
@@ -263,6 +264,44 @@ class BlockTests(unittest.TestCase):
 
     def test_no_blocks_in_flat_text(self):
         self.assertEqual(indent_blocks(self.lines("a\nb\nc\n")), [])
+
+
+class UnwrapTests(unittest.TestCase):
+    def lines(self, text):
+        return textwrap.dedent(text).lstrip("\n").encode().splitlines(True)
+
+    def test_body_is_lifted_and_dedented(self):
+        source = self.lines("""
+            def run(values):
+                if DEBUG:
+                    return values[0]
+        """)
+        candidates = unwrap_candidates(source)
+        self.assertTrue(any(b"if DEBUG" not in c and b"    return values[0]" in c
+                            for c in candidates))
+
+    def test_biggest_wrapper_first(self):
+        source = self.lines("""
+            def outer():
+                if a:
+                    if b:
+                        x = 1
+                        y = 2
+        """)
+        candidates = unwrap_candidates(source)
+        self.assertGreaterEqual(len(candidates), 2)
+        self.assertNotIn(b"def outer", candidates[0])
+
+    def test_tabs_are_left_alone(self):
+        source = self.lines("""
+            def run():
+            \tif DEBUG:
+            \t\treturn 1
+        """)
+        self.assertEqual(unwrap_candidates(source), [])
+
+    def test_flat_text_has_nothing_to_unwrap(self):
+        self.assertEqual(unwrap_candidates(self.lines("a\nb\nc\n")), [])
 
 
 class NamedInTests(unittest.TestCase):
@@ -526,6 +565,28 @@ class EndToEndTests(TempTree):
                         verify=2, passes=2)
         self.assertTrue(outcome.verified)
         self.assertEqual(outcome.kept_files, ["main.py"])
+
+    def test_unwraps_a_wrapper_deletion_cannot_remove(self):
+        # Deleting `if DEBUG:` on its own leaves `keep = ...` at four spaces
+        # and the return at eight, which is an IndentationError.  Only lifting
+        # the body out can get rid of the wrapper.
+        self.write("main.py", """
+            DEBUG = True
+
+
+            def run(values):
+                keep = len(values)
+                if DEBUG:
+                    return values[keep - 1]
+
+
+            run([])
+        """)
+        outcome = carve(self.root, [sys.executable, "main.py"], jobs=4,
+                        verify=1, passes=3)
+        self.assertTrue(outcome.verified)
+        self.assertNotIn(b"if DEBUG", outcome.state["main.py"])
+        self.assertIn(b"keep - 1", outcome.state["main.py"])
 
     def test_refuses_a_command_that_already_passes(self):
         self.write("main.py", "print('fine')\n")

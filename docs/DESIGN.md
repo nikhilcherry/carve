@@ -60,7 +60,7 @@ One subtlety worth remembering: the hint pattern must **not** use `\b` word
 boundaries. `\berror\b` never matches `IndexError`, and getting that wrong made
 carve pick the useless `Traceback` line every time.
 
-## Four granularities
+## Five granularities
 
 Reduction is a fixed-point loop over increasingly fine cuts. Each level only
 runs on what survived the level above, which is what keeps the probe count
@@ -76,7 +76,11 @@ manageable.
    guess costs one rejected probe, and the alternative is a parser per language.
 3. **Lines.** `ddmin` again, to 1-minimality — removing any single surviving
    line stops the failure.
-4. **Tokens** (`--level chars`). `ddmin` over identifiers, numbers, whitespace
+4. **Unwrap.** Deletion alone cannot get past `if debug:` when the statement
+   underneath it is the one that matters — the header is load-bearing only
+   because its body is. Removing the header and dedenting its body breaks that
+   deadlock, and needs no grammar: it is true of every language that indents.
+5. **Tokens** (`--level chars`). `ddmin` over identifiers, numbers, whitespace
    runs and single characters within each line. This is what turns
    `render(a, b, c, timeout=30)` into `render(c)`.
 

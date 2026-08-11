@@ -145,9 +145,12 @@ carve --expect-exit 139                  -- ./run.sh   # exit status
    round, in parallel.
 5. **Cut lines.** `ddmin` again, down to 1-minimal: removing any single
    remaining line stops the failure.
-6. **Cut tokens**, at `--level chars`: the same treatment applied inside each
+6. **Unwrap.** Deletion alone cannot get past `if debug:` when the statement
+   underneath it is the one that matters. Removing the header and dedenting its
+   body can, and needs no grammar — it is true of every language that indents.
+7. **Cut tokens**, at `--level chars`: the same treatment applied inside each
    surviving line.
-7. **Repeat** until a full round changes nothing, then verify the result.
+8. **Repeat** until a full round changes nothing, then verify the result.
 
 Every probe is content-addressed and cached, so no candidate is ever run twice.
 [docs/DESIGN.md](docs/DESIGN.md) goes through the whole thing, including why
