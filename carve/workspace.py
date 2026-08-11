@@ -273,6 +273,11 @@ class Pool:
             self.on_run(runs, verdict)
         return verdict
 
+    def prime(self, state: State, verdict: bool) -> None:
+        """Record a verdict reached outside `test`, so it is not re-run."""
+        with self._lock:
+            self._cache[self.key(state)] = verdict
+
     def run_raw(self, state: State,
                 command: Optional[Sequence[str]] = None) -> RunResult:
         """Execute a candidate and hand back the whole result, uncached."""

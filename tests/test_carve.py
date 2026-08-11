@@ -588,6 +588,25 @@ class EndToEndTests(TempTree):
         self.assertNotIn(b"if DEBUG", outcome.state["main.py"])
         self.assertIn(b"keep - 1", outcome.state["main.py"])
 
+    def test_a_flaky_failure_is_named_as_flaky(self):
+        # Half the runs pass.  The unhelpful version of this message blames
+        # absolute paths and skipped files, sending the user to look in
+        # entirely the wrong place.
+        self.write("main.py", """
+            import os
+
+            if os.getpid() % 2 == 0:
+                raise ValueError("intermittent kaboom")
+        """)
+        with self.assertRaises(ValueError) as caught:
+            carve(self.root, [sys.executable, "main.py"], jobs=1, verify=8)
+        message = str(caught.exception)
+        self.assertTrue(
+            "flaky" in message or "already succeeds" in message
+            or "did not reproduce" in message, message)
+        if "flaky" in message:
+            self.assertIn("--allow-flaky", message)
+
     def test_refuses_a_command_that_already_passes(self):
         self.write("main.py", "print('fine')\n")
         with self.assertRaises(ValueError) as caught:

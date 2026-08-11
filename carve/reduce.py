@@ -525,21 +525,33 @@ def carve(
         max_runs=max_runs, time_budget=time_budget,
         on_run=lambda n, ok: emit("run", n=n, ok=ok),
     ) as pool:
-        if not pool.test(dict(originals)):
+        # Establish how reliable the failure is before touching anything.
+        # "Never reproduced" and "reproduced sometimes" have completely
+        # different causes and completely different fixes, and telling the
+        # user the wrong one sends them looking in the wrong place.
+        attempts = max(2, verify)
+        hits = sum(1 for _ in range(attempts)
+                   if pool.oracle.holds(pool.run_raw(dict(originals))))
+        pool.prime(dict(originals), hits > 0)
+
+        if hits == 0:
             raise ValueError(
-                "the failure did not reproduce in a clean copy of the tree.\n"
-                "  It may depend on absolute paths, on files carve skipped, "
-                "or on state outside the directory.")
-        for _ in range(max(0, verify - 1)):
-            if not pool.oracle.holds(pool.run_raw(dict(originals))):
-                message = ("the failure is flaky: the untouched tree did not "
-                           "reproduce on a repeat run")
-                if not allow_flaky:
-                    raise ValueError(
-                        message + ".\n  Re-run with --allow-flaky to reduce "
-                        "anyway, or pin it down with --signature.")
-                notes.append(message)
-                break
+                "the failure did not reproduce in a clean copy of the tree, "
+                "in {0} attempts.\n"
+                "  It may depend on absolute paths, on files carve skipped "
+                "(.git and caches are not copied — try --with-git), or on "
+                "state outside the directory.".format(attempts))
+        if hits < attempts:
+            message = ("the failure is flaky: it reproduced in {0} of {1} runs "
+                       "of the untouched tree".format(hits, attempts))
+            if not allow_flaky:
+                raise ValueError(
+                    message + ".\n  Reducing against an intermittent failure "
+                    "produces confident nonsense, because carve cannot tell a "
+                    "cut that fixed the bug from one that got lucky.\n"
+                    "  Pin it down with --signature or --expect, or accept "
+                    "that and pass --allow-flaky (with a high --verify).")
+            notes.append(message)
 
         if shrink_command:
             emit("phase", name="command", total=len(command))
